@@ -1,29 +1,46 @@
 # Automatic error location tracking
 
-## Initial intention
+## Purpose and scope
 
-- Make `tracked-anyhow` a drop-in replacement for `anyhow` that produces
+Make `tracked-anyhow` a drop-in replacement for `anyhow` that produces
 location-aware diagnostics resembling [anyhow-auto-context], without changing
 application imports, public types, method signatures, macro syntax, or ordinary
-`?` expressions. Users shouldn't expect surprises doing
+`?` expressions.
 
-    ```diff
-    - anyhow = "1.0"
-    + anyhow = { package = "tracked-anyhow", version = "0.1" }
-    ```
+- Keep the public API unchanged and upstream `anyhow` commits easy to merge
+- Follow upstream anyhow's diagnostic format as closely as possible, adding only
+  metadata annotations needed for diagnosis, with compact `[file:line:column]`
+  suffixes for locations; format compatibility takes precedence over resemblance
+  to `anyhow-auto-context`
+- Capture creation, conversion, and explicit context-attachment locations
+- Enrich errors created by existing macros with source text and best-effort
+  enclosing scope
+- The code diff with anyhow should be minimal
 
-- user facing API shouldn't change at all
-- `anyhow` commits should be easily mergeable
-- Diagnostic output MUST follow upstream anyhow's existing format as closely as
-possible. Preserve its message-first layout, cause ordering and numbering,
-headings, indentation, blank-line conventions, and backtrace presentation.
-Add only the metadata annotations needed for diagnosis. Resemblance to
-`anyhow-auto-context` must not take precedence over this format compatibility.
-Use compact `[file:line:column]` suffixes for locations.
-- Implement creation/conversion locations and explicit context-attachment
-locations. Enrich errors created by existing macros with source text and
-best-effort enclosing scope. This is not a complete error-propagation trace:
-forwarding an existing anyhow error with `?` does not enter this crate.
+This is not a complete error-propagation trace: forwarding an existing anyhow
+error with `?` does not enter this crate.
+
+The original dependency-rename sketch illustrates the goal of changing only
+Cargo configuration:
+
+```diff
+- anyhow = "1.0"
++ anyhow = { package = "tracked-anyhow", version = "0.1" }
+```
+
+Essentially it should keep anyhow behaviour intact, only adding compact
+bracketed location to the error formatting:
+
+```text
+loading configuration [src/main.rs:28]
+
+Caused by:
+    No such file or directory (os error 2) [src/config.rs:12]
+```
+
+This sketch does not satisfy the package-identity requirement. For adoption,
+keep the package name `anyhow` and use the workspace-root patch described in
+[Adoption and excluded scope](#adoption-and-excluded-scope).
 
 ## Compatibility contract
 
@@ -41,15 +58,19 @@ forwarding an existing anyhow error with `?` does not enter this crate.
   reference
 - Preserve the one-word `Error` representation, its existing `Option<Error>`
   layout, and auto traits; metadata may enlarge the private heap allocation
-- Preserve MSRV and `no_std` support, existing backtrace capture policy, and
-  success-path evaluation behavior; keep `with_context` lazy and evaluate its
-  closure exactly once on failure
+- Preserve the minimum supported Rust version (MSRV), `no_std` support, and
+  existing backtrace capture policy
+- Preserve success-path evaluation behavior; keep `with_context` lazy and
+  evaluate its closure exactly once on failure
 
-Location tracking is enabled without additional user configuration. Do not add a
-feature flag or runtime setting in this change. Locations must work with
-backtraces disabled. Capturing location metadata must not perform stack walks,
-symbolization, or source-file reads. Existing backtraces remain independent
-diagnostics.
+Location tracking has these configuration and capture requirements:
+
+- Enable tracking without additional user configuration; do not add a feature
+  flag or runtime setting in this change
+- Support locations with backtraces disabled; existing backtraces remain
+  independent diagnostics
+- Do not perform stack walks, symbolization, or source-file reads when capturing
+  location metadata
 
 Hidden helpers needed by exported macros may use the existing `__private`
 namespace. They are implementation details, not a new documented API.
@@ -77,32 +98,38 @@ new inherent methods. Cover every existing macro arm, including literal and
 formatted messages, typed and boxed errors, and specialized `ensure!` comparison
 rendering.
 
-For `.context(...)` on a foreign error or `None`, conversion/creation and
-attachment occur at the same call. Store one context record on that new layer;
-do not invent an additional origin for the underlying error. Separate subsequent
-context calls remain distinct even when their source locations match.
+For `.context(...)` on a foreign error or `None`, conversion or creation and
+attachment occur at the same call:
+
+- Store one context record on that new layer; do not invent an additional origin
+  for the underlying error
+- Keep subsequent context calls distinct even when their source locations match
 
 A macro invocation that constructs an error produces one record, not separate
-records for its internal helpers. Preserve the existing dispatch of custom
-`Into<Error>` implementations. Treat errors returned through an opaque custom
-conversion as already constructed: do not overwrite their entry metadata or
-claim that the macro observed their original creation.
+records for its internal helpers.
+
+Preserve the existing dispatch of custom `Into<Error>` implementations. Treat
+errors returned through an opaque custom conversion as already constructed: do
+not overwrite their entry metadata or claim that the macro observed their
+original creation.
 
 ## Caller-location rules and limits
 
 Use `#[track_caller]` and [`core::panic::Location::caller()`][location] for
-direct function and method boundaries. Capture once, before invoking a
-user-supplied context closure, and pass the captured metadata explicitly through
-private helpers. Apply tracking to the `Context` trait declarations and audit
-every constructor and dispatch path; annotating `Error::new` alone is
-insufficient.
+direct function and method boundaries:
+
+- Capture once, before invoking a user-supplied context closure, and pass the
+  captured metadata explicitly through private helpers
+- Apply tracking to the `Context` trait declarations and audit every constructor
+  and dispatch path; annotating `Error::new` alone is insufficient
 
 Follow Rust's [caller-location semantics][track-caller]: a chain of tracked
 functions forwards the location from its nearest untracked caller. An untracked
-wrapper stops that forwarding. Function-pointer calls and callbacks such as
-`.map_err(Error::msg)` do not have a guaranteed application call site. Retain
-the compiler-provided hint and document this limitation rather than guessing a
-replacement from a backtrace.
+wrapper stops that forwarding.
+
+Function-pointer calls and callbacks such as `.map_err(Error::msg)` do not have
+a guaranteed application call site. Retain the compiler-provided hint and
+document this limitation rather than guessing a replacement from a backtrace.
 
 Synchronous constructors and context methods called inside an async body can
 capture their local call sites. Tracking does not follow task boundaries or
@@ -119,19 +146,26 @@ interception point either.
 ### Rich macro metadata
 
 Capture the compiler-reported macro invocation coordinates with `file!`,
-`line!`, and `column!`, including their normal behavior through nested macros.
-Keep these coordinates authoritative even inside a caller annotated with
-`#[track_caller]`. Store the outer invocation's original argument tokens with
-`stringify!`, not expanded helper tokens. Do not evaluate arguments again or
-collect runtime variable values beyond the existing message formatting. Use
-compiler-reported file paths without filesystem canonicalization.
+`line!`, and `column!`:
+
+- Preserve their normal behavior through nested macros and keep these
+  coordinates authoritative even inside a caller annotated with
+  `#[track_caller]`
+- Store the outer invocation's original argument tokens with `stringify!`, not
+  expanded helper tokens
+- Do not evaluate arguments again or collect runtime variable values beyond the
+  existing message formatting
+- Use compiler-reported file paths without filesystem canonicalization
 
 Derive scope at the expansion site using the helper-function type-name technique
-in [anyhow-auto-context]. Use `core`-compatible helpers and no allocating scope
-string. Scope is diagnostic best-effort because [`type_name`][type-name] does
-not guarantee its exact output. Omit unavailable scope rather than substituting
-an internal helper name. Ordinary methods must not fabricate receiver
-expressions or enclosing function names.
+in [anyhow-auto-context]:
+
+- Use `core`-compatible helpers without allocating a scope string
+- Treat scope as best-effort diagnostic information because
+  [`type_name`][type-name] does not guarantee its exact output
+- Omit unavailable scope rather than substituting an internal helper name
+- Do not fabricate receiver expressions or enclosing function names for ordinary
+  methods
 
 ## Internal representation
 
@@ -141,29 +175,41 @@ wrap arbitrary foreign errors merely to carry a location.
 
 Each newly allocated anyhow layer owns one record containing its event kind
 (`created`, `converted`, or `context`), file/line/column, and optional static
-macro source text and scope. Retain inner records when adding context; preserve
-the original entry rather than replacing it with the most recent attachment.
+macro source text and scope. When adding context, retain inner records and the
+original entry rather than replacing them with the most recent attachment.
 
 Extend the private `ErrorImpl` header and, where needed, its vtable to traverse
-metadata in anyhow-owned context layers. Keep the vtable in its required first
-position and the erased payload last. Review layout, alignment, pointer casts,
-`ManuallyDrop`, owned downcasting, and all drop paths together. A formatter must
-not reinterpret arbitrary `dyn Error` pointers as anyhow allocation headers.
+metadata in anyhow-owned context layers:
 
-Use static references or compact copied descriptors. Adding a record to an
-allocation already needed by anyhow must not require another heap allocation. Do
-not introduce a global registry, thread-local state, a separately allocated
-record vector, or runtime dependencies. Record storage and traversal should
-scale with anyhow-owned layers, not stack depth.
+- Keep the vtable in its required first position and the erased payload last
+- Review layout, alignment, pointer casts, `ManuallyDrop`, owned downcasting,
+  and all drop paths together
+- Do not reinterpret arbitrary `dyn Error` pointers as anyhow allocation headers
+  in the formatter
+
+Keep metadata storage within anyhow's existing allocations:
+
+- Use static references or compact copied descriptors
+- Adding a record to an allocation already needed by anyhow must not require
+  another heap allocation
+- Do not introduce a global registry, thread-local state, a separately allocated
+  record vector, or runtime dependencies
+- Record storage and traversal should scale with anyhow-owned layers, not stack
+  depth
 
 ## Diagnostic output
 
-Use the baseline formatter in [`src/fmt.rs`](src/fmt.rs). Preserve the outer
-message, the conditional `Caused by:` heading, unnumbered single causes,
-zero-based numbering for multiple causes, existing message indentation and
-blank lines, and the optional stack-backtrace section. Do not replace the report
-with a tree, location-first frames, or compiler-style diagnostics, or introduce
-a separate `Locations:` section.
+Use the [baseline] formatter in [`src/fmt.rs`](src/fmt.rs). Preserve its report
+structure:
+
+- The outer message first, followed by the conditional `Caused by:` heading
+- Cause order, with unnumbered single causes and zero-based numbering for
+  multiple causes
+- Existing message indentation and blank lines
+- The optional stack-backtrace section and its presentation
+
+Do not replace the report with a tree, location-first frames, or compiler-style
+diagnostics, or introduce a separate `Locations:` section.
 
 Append one ASCII space followed by `[file:line:column]` to the message
 associated with each recorded anyhow-owned layer. Do not include `at` or
@@ -181,11 +227,14 @@ Caused by:
 ```
 
 For multiline messages, append annotations to the final message line, before any
-trailing line breaks. Preserve all original message characters and the baseline
-indentation. Do not trim messages, wrap paths, or add line breaks. Removing only
-the added annotations must recover the baseline output for the same error
-messages and backtrace. With no records, output must match the baseline exactly.
-Do not add a new `Error:` prefix inside the formatter.
+trailing line breaks. Apply these preservation rules:
+
+- Preserve all original message characters and the baseline indentation; do not
+  trim messages, wrap paths, or add line breaks
+- Removing only the added annotations must recover the baseline output for the
+  same error messages and backtrace
+- With no records, output must match the baseline exactly
+- Do not add a new `Error:` prefix inside the formatter
 
 Keep event kinds in the metadata but do not print them. Locations identify
 observed creation, conversion, or context-attachment sites, not necessarily
@@ -194,7 +243,9 @@ where an underlying failure occurred.
 When macro scope or source text is available, append `[scope: ...]` and
 `[expression: ...]` after the location on the same message line, in that order.
 Escape embedded line breaks and control characters in these optional fields and
-omit absent fields. Do not add continuation lines, causes, or report sections.
+omit absent fields.
+
+Do not add continuation lines, causes, or report sections.
 
 Do not add location entries to `chain()` or assign a nearby layer's location to
 an opaque foreign source error. Keep repeated formatting read-only and
@@ -206,12 +257,15 @@ Moving an anyhow error retains its metadata. Successful downcasting into the
 original value may discard metadata belonging to the consumed anyhow wrapper.
 Do not change downcast behavior to preserve it.
 
-`into_boxed_dyn_error` keeps the anyhow allocation, so its own `Debug` formatter
-can retain its locations. Re-wrapping that opaque box with `from_boxed` records
-a new conversion; recovering or flattening its earlier metadata is not required.
-`reallocate_into_boxed_dyn_error_without_backtrace` may discard metadata with
-the allocation it removes. Preserve existing source and boxed-downcast semantics
-in all cases, and document metadata loss at these boundaries.
+Preserve existing source and boxed-downcast semantics in all cases, and document
+metadata loss at these boundaries:
+
+- `into_boxed_dyn_error` keeps the anyhow allocation, so the boxed error's own
+  `Debug` formatter can retain its locations
+- Re-wrapping that opaque box with `from_boxed` records a new conversion;
+  recovering or flattening its earlier metadata is not required
+- `reallocate_into_boxed_dyn_error_without_backtrace` may discard metadata with
+  the allocation it removes
 
 ## Implementation plan
 
@@ -231,40 +285,78 @@ and this specification aligned as implementation proceeds.
 5. [ ] Implement bracketed inline annotations in `src/fmt.rs` and add formatting
    and boxed-interoperation regression tests
 6. [ ] Document adoption, supported capture points, and limitations in the
-       README; run the compatibility checks below and report measured overhead
+   README; run the compatibility checks below and report measured overhead
 
 ## Acceptance and validation
 
-| Area                     | Required evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Capture accuracy         | Assert file, line, and column for each supported boundary, using distinct known call sites rather than merely matching a filename                                                                                                                                                                                                                                                                                                                                  |
-| Macro coverage           | Exercise every message/error form, macro aliases and nested wrappers, generic callers, renamed imports, tracked callers, and specialized/fallback `ensure!` dispatch                                                                                                                                                                                                                                                                                               |
-| Context                  | Cover `Result` with foreign and anyhow errors, `Option`, `Error::context`, generic `Context` bounds, repeated attachments, zero closure calls on success, one on failure, and panic/drop behavior                                                                                                                                                                                                                                                                  |
-| Missing interception     | Show that existing-error `?`, direct returns, identity conversions, and pass-through macros preserve old records without adding new ones                                                                                                                                                                                                                                                                                                                           |
-| Async and indirect calls | Test direct calls inside async bodies, moves between threads/tasks, untracked wrappers, function items as callbacks, and function-pointer coercions; distinguish supported capture from documented hints                                                                                                                                                                                                                                                           |
-| Compatibility            | Retain upstream tests for cause chains, typed contexts, downcasts, boxed conversions, auto traits, layout, macro evaluation, and drop safety; update only intentionally changed debug-output expectations                                                                                                                                                                                                                                                          |
-| Formatting               | Assert exact `[file:line:column]` annotations without `at` or event-kind labels; check `{}`, `{:#}`, and underlying `{:#?}` behavior against the baseline; verify that removing annotations recovers baseline `{:?}` output, including headings, cause numbering, indentation, blank lines, and backtrace presentation; cover zero, one, and multiple causes, multiline messages with trailing line breaks, optional macro fields, and backtraces disabled/enabled |
-| Cost                     | Compare allocation counts, success/error-path timings, allocation sizes, and binary size against the baseline; no added metadata allocations or eager context evaluation                                                                                                                                                                                                                                                                                           |
+For this specification-only PR, validate the Markdown structure, references, and
+diff. Implementation tests and benchmarks are not completion criteria for the
+documentation PR. The following checks apply to the implementation PR.
+
+### Capture accuracy and macro coverage
+
+- Assert file, line, and column for each supported boundary, using distinct
+  known call sites rather than merely matching a filename
+- Exercise every message and error form, macro aliases and nested wrappers,
+  generic callers, renamed imports, tracked callers, and specialized and
+  fallback `ensure!` dispatch
+
+### Context and existing-error propagation
+
+- Cover `Result` with foreign and anyhow errors, `Option`, `Error::context`,
+  generic `Context` bounds, and repeated attachments
+- Verify zero context-closure calls on success, one on failure, and panic and
+  drop behavior
+- Show that existing-error `?`, direct returns, identity conversions, and
+  pass-through macros preserve old records without adding new ones
+
+### Async and indirect calls
+
+- Test direct calls inside async bodies, moves between threads and tasks,
+  untracked wrappers, function items as callbacks, and function-pointer
+  coercions
+- Distinguish supported capture from documented hints
+
+### Compatibility and formatting
+
+- Retain upstream tests for cause chains, typed contexts, downcasts, boxed
+  conversions, auto traits, layout, macro evaluation, and drop safety
+- Update only intentionally changed debug-output expectations
+- Assert exact `[file:line:column]` annotations without `at` or event-kind
+  labels
+- Check `{}`, `{:#}`, and underlying `{:#?}` behavior against the baseline
+- Verify that removing annotations recovers baseline `{:?}` output, including
+  headings, cause numbering, indentation, blank lines, and backtrace
+  presentation
+- Cover zero, one, and multiple causes; multiline messages with trailing line
+  breaks; optional macro fields; and backtraces disabled and enabled
+
+### Cost
+
+- Compare allocation counts, success-path and error-path timings, allocation
+  sizes, and binary size against the baseline
+- Verify no added metadata allocations or eager context evaluation
+- Report measurements and any toolchain-dependent capture limitations; do not
+  claim zero overhead
+
+### CI and additional checks
 
 Run the existing CI coverage: `cargo test`, standard and `--no-default-features`
 checks, MSRV builds through `tests/crate/Cargo.toml`, Windows checks, rustdoc,
 Clippy, and Miri with the repository's layout/provenance settings. See
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for the exact commands
 and matrix. Add targeted release-mode and MSRV caller-location tests where
-ordinary CI does not exercise them. Do not claim zero overhead; report
-measurements and any toolchain-dependent capture limitations.
-
-For this specification-only PR, validate the Markdown structure, references, and
-diff. Implementation tests and benchmarks are not completion criteria for the
-documentation PR.
+ordinary CI does not exercise them.
 
 ## Adoption and excluded scope
 
 Keep the package name `anyhow`. Document a workspace-root `[patch.crates-io]`
 entry pointing to this fork so compatible direct and transitive dependencies use
-the same resolved package. Follow [Cargo's patch rules][cargo-patch] and verify
-the resolved graph; renaming a second package in application imports does not
-unify its error type with upstream anyhow.
+the same resolved package.
+
+Follow [Cargo's patch rules][cargo-patch] and verify the resolved graph;
+renaming a second package in application imports does not unify its error type
+with upstream anyhow.
 
 Do not implement a custom `Result`, custom `Try`, automatic source rewriting,
 backtrace-based source reconstruction, or a new public metadata API in this
