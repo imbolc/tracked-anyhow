@@ -10,6 +10,7 @@ mod ext {
     use super::*;
 
     pub trait StdError {
+        #[track_caller]
         fn ext_context<C>(self, context: C) -> Error
         where
             C: Display + Send + Sync + 'static;
@@ -84,7 +85,7 @@ where
 ///     # const IGNORE: &str = stringify! {
 ///     ...
 ///     # };
-///     # unimplemented!()
+///     # unreachable!()
 /// }
 /// ```
 impl<T> Context<T, Infallible> for Option<T> {

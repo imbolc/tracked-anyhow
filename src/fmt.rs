@@ -25,10 +25,12 @@ impl ErrorImpl {
         }
 
         write!(f, "{}", error)?;
+        unsafe { Self::fmt_location(this, f) }?;
 
         if let Some(cause) = error.source() {
             write!(f, "\n\nCaused by:")?;
             let multiple = cause.source().is_some();
+            let mut context = unsafe { Self::context(this) };
             for (n, error) in Chain::new(cause).enumerate() {
                 writeln!(f)?;
                 let mut indented = Indented {
@@ -37,6 +39,11 @@ impl ErrorImpl {
                     started: false,
                 };
                 write!(indented, "{}", error)?;
+                if let Some(layer) = context {
+                    // Do not make Indented add whitespace to an empty message.
+                    unsafe { Self::fmt_location(layer, indented.inner) }?;
+                    context = unsafe { Self::context(layer) };
+                }
             }
         }
 
@@ -63,6 +70,11 @@ impl ErrorImpl {
         }
 
         Ok(())
+    }
+
+    unsafe fn fmt_location(this: Ref<Self>, f: &mut fmt::Formatter) -> fmt::Result {
+        let location = unsafe { Self::location(this) };
+        write!(f, " [{}:{}]", location.file(), location.line())
     }
 }
 

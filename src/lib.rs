@@ -275,7 +275,7 @@ use std::error::Error as StdError;
 #[cfg(not(any(feature = "std", anyhow_no_core_error)))]
 use core::error::Error as StdError;
 
-#[cfg(all(not(feature = "std"), anyhow_no_core_error))]
+#[cfg(all(not(feature = "std", anyhow_no_core_error)))]
 trait StdError: Debug + Display {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         None
@@ -341,7 +341,7 @@ pub use anyhow as format_err;
 ///    1: core::result::Result<T,E>::map_err
 ///              at /git/rustc/src/libcore/result.rs:596
 ///    2: anyhow::context::<impl anyhow::Context<T,E> for core::result::Result<T,E>>::with_context
-///              at /git/anyhow/src/context.rs:58
+///              at /git/rustc/src/libcore/result.rs:596
 ///    3: testing::main
 ///              at src/main.rs:5
 ///    4: std::rt::lang_start
@@ -615,12 +615,14 @@ pub type Result<T, E = Error> = core::result::Result<T, E>;
 ///     ```
 pub trait Context<T, E>: context::private::Sealed {
     /// Wrap the error value with additional context.
+    #[track_caller]
     fn context<C>(self, context: C) -> Result<T, Error>
     where
         C: Display + Send + Sync + 'static;
 
     /// Wrap the error value with additional context that is evaluated lazily
     /// only once an error does occur.
+    #[track_caller]
     fn with_context<C, F>(self, f: F) -> Result<T, Error>
     where
         C: Display + Send + Sync + 'static,
@@ -681,6 +683,7 @@ pub mod __private {
     #[doc(hidden)]
     #[inline]
     #[cold]
+    #[track_caller]
     pub fn format_err(args: Arguments) -> Error {
         if let Some(message) = args.as_str() {
             // anyhow!("literal"), can downcast to &'static str
