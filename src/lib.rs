@@ -1,4 +1,4 @@
-//! [![github]](https://github.com/dtolnay/anyhow)&ensp;[![crates-io]](https://crates.io/crates/anyhow)&ensp;[![docs-rs]](https://docs.rs/anyhow)
+//! [![github]](https://github.com/imbolc/tracked-anyhow)&ensp;[![crates-io]](https://crates.io/crates/tracked-anyhow)&ensp;[![docs-rs]](https://docs.rs/tracked-anyhow)
 //!
 //! [github]: https://img.shields.io/badge/github-8da0cb?style=for-the-badge&labelColor=555555&logo=github
 //! [crates-io]: https://img.shields.io/badge/crates.io-fc8d62?style=for-the-badge&labelColor=555555&logo=rust
@@ -8,6 +8,21 @@
 //!
 //! This library provides [`anyhow::Error`][Error], a trait object based error
 //! type for easy idiomatic error handling in Rust applications.
+//!
+//! This fork is published as `tracked-anyhow` with the library target `anyhow`:
+//!
+//! ```toml
+//! [dependencies]
+//! anyhow = { package = "tracked-anyhow", version = "0.1" }
+//! ```
+//!
+//! Normal `Debug` reports add `[file:line]` annotations. Output examples below
+//! show the upstream text before those annotations. Other formats are unchanged.
+//! The dependency alias does not replace transitive upstream anyhow dependencies;
+//! their error types remain distinct. See the [README] for adoption and release
+//! details.
+//!
+//! [README]: https://github.com/imbolc/tracked-anyhow#readme
 //!
 //! <br>
 //!
@@ -198,7 +213,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! anyhow = { version = "1.0", default-features = false }
+//! anyhow = { package = "tracked-anyhow", version = "0.1", default-features = false }
 //! ```
 //!
 //! With versions of Rust older than 1.81, no_std mode may require an additional
@@ -206,7 +221,7 @@
 //! function that returns Anyhow's error type, as the trait that `?`-based error
 //! conversions are defined by is only available in std in those old versions.
 
-#![doc(html_root_url = "https://docs.rs/anyhow/1.0.104")]
+#![doc(html_root_url = "https://docs.rs/tracked-anyhow/0.1.0+anyhow.1.0.104")]
 #![cfg_attr(error_generic_member_access, feature(error_generic_member_access))]
 #![no_std]
 #![deny(dead_code, unsafe_op_in_unsafe_fn, unused_imports, unused_mut)]

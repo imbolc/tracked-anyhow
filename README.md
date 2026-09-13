@@ -1,5 +1,10 @@
 # Tracked anyhow
 
+[<img alt="github" src="https://img.shields.io/badge/github-imbolc/tracked--anyhow-8da0cb?style=for-the-badge&labelColor=555555&logo=github" height="20">](https://github.com/imbolc/tracked-anyhow)
+[<img alt="crates.io" src="https://img.shields.io/crates/v/tracked-anyhow.svg?style=for-the-badge&color=fc8d62&logo=rust" height="20">](https://crates.io/crates/tracked-anyhow)
+[<img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-tracked--anyhow-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs" height="20">](https://docs.rs/tracked-anyhow)
+[<img alt="build status" src="https://img.shields.io/github/actions/workflow/status/imbolc/tracked-anyhow/ci.yml?branch=master&style=for-the-badge" height="20">](https://github.com/imbolc/tracked-anyhow/actions?query=branch%3Amaster)
+
 This fork adds `[file:line]` suffixes to normal `Debug` (`{:?}`) reports while
 keeping anyhow's public API, display formats, cause chains, and typed downcasts.
 Tracking is always enabled, including when backtraces are disabled.
@@ -11,24 +16,56 @@ Caused by:
     No such file or directory (os error 2) [src/config.rs:12]
 ```
 
-## Use this implementation branch
+## Installation
 
-The Cargo package in this checkout remains named `anyhow`. Add a patch in the
-workspace root so compatible direct and transitive dependencies use the same
-error type:
+Use the published package through the existing dependency name:
+
+```diff
+- anyhow = "1.0"
++ anyhow = { package = "tracked-anyhow", version = "0.1" }
+```
 
 ```toml
 [dependencies]
-anyhow = "1.0"
-
-[patch.crates-io]
-anyhow = { git = "https://github.com/imbolc/tracked-anyhow", branch = "tracking-impl" }
+anyhow = { package = "tracked-anyhow", version = "0.1" }
 ```
 
-Update the lockfile with `cargo update -p anyhow` and check the resolved graph.
-A dependency alias such as `package = "tracked-anyhow"` alone does not replace
-transitive dependencies on the `anyhow` package. Publication under a different
-package name is not part of this implementation. See [Cargo's patch rules].
+The Cargo package is `tracked-anyhow`; its library target remains `anyhow` so
+existing imports, macros, and doctests keep their names. To use this branch
+before a release:
+
+```toml
+[dependencies.anyhow]
+package = "tracked-anyhow"
+git = "https://github.com/imbolc/tracked-anyhow"
+branch = "tracking-impl"
+```
+
+### Dependencies using upstream anyhow
+
+The [dependency alias] changes only the dependency in the adopting crate. It does
+not replace transitive dependencies on upstream `anyhow`. Both packages may
+coexist, but their `Error` types are distinct, even though both library targets
+are named `anyhow`. Update each workspace crate that adopts tracking.
+
+Concrete foreign errors still convert normally. APIs that exchange upstream
+`anyhow::Error` or `anyhow::Result` with the fork need explicit conversion or a
+coordinated migration. In particular, upstream `anyhow::Error` does not implement
+`std::error::Error`, so the fork's blanket conversion does not bridge it through
+`?`. A renamed package is not a whole-graph `[patch.crates-io]` replacement.
+
+## Versioning
+
+Versions use independent fork SemVer plus the exact upstream base, for example
+`0.1.0+anyhow.1.0.104`. A tracking fix can become `0.1.1+anyhow.1.0.104`; a later
+compatible upstream update can become `0.1.2+anyhow.1.0.105`. Choose the fork's
+major/minor/patch bump according to compatibility, not the upstream version.
+
+Every release increments the fork version. Never publish versions differing
+only in the `+anyhow...` suffix: [Cargo ignores build metadata] in version
+requirements. Users request `version = "0.1"`, or a minimum fork version such as
+`"0.1.1"` when they need a particular fix. Document upstream updates in release
+notes and keep `src/lib.rs`'s documentation root URL in sync with the manifest.
 
 ## What locations mean
 
@@ -67,33 +104,33 @@ backtraces disabled for exact diagnostic snapshots:
 ```sh
 RUST_LIB_BACKTRACE=0 cargo test
 cargo check --no-default-features
+cargo test --manifest-path tests/crate/Cargo.toml
+cargo test --manifest-path tests/crate/Cargo.toml --no-default-features
+cargo publish --dry-run
 ```
 
-The existing CI configuration also covers MSRV builds, Windows, Clippy, and Miri.
+The publication dry run packages and builds the crate without uploading it.
+CI includes that check and the aliased downstream smoke test, alongside MSRV
+builds, Windows, Clippy, and Miri.
 The upstream documentation below describes the base API; normal debug reports
 add the location suffixes described above.
 
-[Cargo's patch rules]: https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html
+[dependency alias]: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#renaming-dependencies-in-cargotoml
+[Cargo ignores build metadata]: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#version-metadata
 [`#[track_caller]` forwarding rules]: https://doc.rust-lang.org/reference/attributes/codegen.html#the-track_caller-attribute
 
 ---
 
-Anyhow&ensp;¯\\\_(°ペ)\_/¯
-==========================
-
-[<img alt="github" src="https://img.shields.io/badge/github-dtolnay/anyhow-8da0cb?style=for-the-badge&labelColor=555555&logo=github" height="20">](https://github.com/dtolnay/anyhow)
-[<img alt="crates.io" src="https://img.shields.io/crates/v/anyhow.svg?style=for-the-badge&color=fc8d62&logo=rust" height="20">](https://crates.io/crates/anyhow)
-[<img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-anyhow-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs" height="20">](https://docs.rs/anyhow)
-[<img alt="build status" src="https://img.shields.io/github/actions/workflow/status/dtolnay/anyhow/ci.yml?branch=master&style=for-the-badge" height="20">](https://github.com/dtolnay/anyhow/actions?query=branch%3Amaster)
+## API overview
 
 This library provides [`anyhow::Error`][Error], a trait object based error type
 for easy idiomatic error handling in Rust applications.
 
-[Error]: https://docs.rs/anyhow/1.0/anyhow/struct.Error.html
+[Error]: https://docs.rs/tracked-anyhow/0.1/anyhow/struct.Error.html
 
 ```toml
 [dependencies]
-anyhow = "1.0"
+anyhow = { package = "tracked-anyhow", version = "0.1" }
 ```
 
 <br>
@@ -211,7 +248,7 @@ Cargo.toml. A global allocator is required.
 
 ```toml
 [dependencies]
-anyhow = { version = "1.0", default-features = false }
+anyhow = { package = "tracked-anyhow", version = "0.1", default-features = false }
 ```
 
 With versions of Rust older than 1.81, no_std mode may require an additional
