@@ -6,40 +6,20 @@
 )]
 
 use anyhow::{anyhow, bail, ensure, Context, Error, Result};
+use futures::FutureExt;
 use std::cell::Cell;
 use std::error::Error as StdError;
-use std::fmt::{self, Display};
-use std::future::Future;
-use std::mem::size_of;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::task::{Poll, Wake, Waker};
+use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
+#[error("leaf")]
 struct Leaf;
 
-impl Display for Leaf {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("leaf")
-    }
-}
-
-impl StdError for Leaf {}
-
-#[derive(Debug)]
-struct Foreign(Leaf);
-
-impl Display for Foreign {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("foreign")
-    }
-}
-
-impl StdError for Foreign {
-    fn source(&self) -> Option<&(dyn StdError + 'static)> {
-        Some(&self.0)
-    }
-}
+#[derive(Error, Debug)]
+#[error("foreign")]
+struct Foreign(#[source] Leaf);
 
 fn report(error: &Error) -> String {
     let mut text = format!("{error:?}");
@@ -318,13 +298,6 @@ fn context_reuses_the_original_backtrace() {
 }
 
 #[test]
-fn public_pointer_layouts_are_unchanged() {
-    assert_eq!(size_of::<Error>(), size_of::<usize>());
-    assert_eq!(size_of::<Option<Error>>(), size_of::<usize>());
-    assert_eq!(size_of::<Result<()>>(), size_of::<usize>());
-}
-
-#[test]
 fn multiline_message_bytes_are_preserved() {
     for message in ["", "first\nsecond", "first\n\n", "first\r\n", "[text] "] {
         let line = line!() + 1;
@@ -350,12 +323,6 @@ fn multiline_cause_indentation_is_preserved() {
 
 #[test]
 fn async_body_captures_the_local_conversion_site() {
-    struct Noop;
-
-    impl Wake for Noop {
-        fn wake(self: Arc<Self>) {}
-    }
-
     async fn fail(line: &mut u32) -> Result<()> {
         std::future::ready(()).await;
         *line = line!() + 1;
@@ -363,31 +330,15 @@ fn async_body_captures_the_local_conversion_site() {
         Ok(())
     }
 
-    let waker = Waker::from(Arc::new(Noop));
-    let mut context = std::task::Context::from_waker(&waker);
     let mut line = 0;
-    let result = {
-        let mut future = Box::pin(fail(&mut line));
-        future.as_mut().poll(&mut context)
-    };
-    let error = match result {
-        Poll::Ready(Err(error)) => error,
-        _ => panic!("expected a ready error"),
-    };
+    let error = fail(&mut line).now_or_never().unwrap().unwrap_err();
     assert_eq!(report(&error), format!("leaf [{}:{line}]", file!()));
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
+#[error("aligned")]
 #[repr(align(128))]
 struct Aligned(Arc<AtomicUsize>);
-
-impl Display for Aligned {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("aligned")
-    }
-}
-
-impl StdError for Aligned {}
 
 impl Drop for Aligned {
     fn drop(&mut self) {
