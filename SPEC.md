@@ -12,6 +12,7 @@ possible. Preserve its message-first layout, cause ordering and numbering,
 headings, indentation, blank-line conventions, and backtrace presentation.
 Add only the metadata annotations needed for diagnosis. Resemblance to
 `anyhow-auto-context` must not take precedence over this format compatibility.
+Use compact `[file:line:column]` suffixes for locations.
 
 Implement creation/conversion locations and explicit context-attachment
 locations. Enrich errors created by existing macros with source text and
@@ -30,9 +31,9 @@ This document specifies future implementation. The specification PR changes only
 - Preserve `{}`, `{:#}`, `to_string()`, and the existing `{:#?}` delegation to the
   underlying error; enrich normal `{:?}` diagnostics only, including the report
   produced by an error returned from `main`
-- Keep normal `{:?}` recognizable as upstream anyhow output; annotations may
-  extend messages or add continuation lines but must not reorganize the report
-  or change cause numbering
+- Keep normal `{:?}` recognizable as upstream anyhow output; add inline bracketed
+  annotations without adding lines, reorganizing the report, or changing cause
+  numbering
 - Preserve source-chain contents and order, `root_cause()`, dereferencing, typed
   context, `is`, and downcasting by value, shared reference, and mutable reference
 - Preserve the one-word `Error` representation, its existing `Option<Error>`
@@ -159,22 +160,35 @@ blank lines, and the optional stack-backtrace section. Do not replace the report
 with a tree, location-first frames, or compiler-style diagnostics, or introduce
 a separate `Locations:` section.
 
-Add annotations next to the message associated with each recorded anyhow-owned
-layer, either inline or on indented continuation lines. Keep unannotated messages
-unchanged. Removing only the added annotations must recover the baseline output
-for the same error messages and backtrace. With no records, output must match the
-baseline exactly. Do not add a new `Error:` prefix inside the formatter.
+Append one ASCII space followed by `[file:line:column]` to the message associated
+with each recorded anyhow-owned layer. Do not include `at` or event-kind labels
+inside the brackets. Leave messages without associated metadata unchanged.
 
-The exact annotation placement and punctuation remain pending selection. Keep
-event kinds in the metadata regardless of whether the chosen format prints them.
-Locations identify observed creation, conversion, or context-attachment sites,
-not necessarily where an underlying failure occurred.
+For an I/O error first converted in `src/config.rs` and later given context in
+`src/main.rs`, render:
 
-When macro scope or source text is available, include it as a compact annotation
-of the same layer, not as a new cause or report section. Escape embedded line
-breaks and control characters in these optional fields and omit absent fields.
-Preserve the existing handling of multiline error messages. Finalize annotation
-indentation for both numbered and unnumbered causes with the selected format.
+```text
+loading configuration [src/main.rs:28:10]
+
+Caused by:
+    No such file or directory (os error 2) [src/config.rs:12:8]
+```
+
+For multiline messages, append annotations to the final message line, before any
+trailing line breaks. Preserve all original message characters and the baseline
+indentation. Do not trim messages, wrap paths, or add line breaks. Removing only
+the added annotations must recover the baseline output for the same error
+messages and backtrace. With no records, output must match the baseline exactly.
+Do not add a new `Error:` prefix inside the formatter.
+
+Keep event kinds in the metadata but do not print them. Locations identify
+observed creation, conversion, or context-attachment sites, not necessarily
+where an underlying failure occurred.
+
+When macro scope or source text is available, append ` [scope: ...]` and
+` [expression: ...]` after the location on the same message line, in that order.
+Escape embedded line breaks and control characters in these optional fields and
+omit absent fields. Do not add continuation lines, causes, or report sections.
 
 Do not add location entries to `chain()` or assign a nearby layer's location to
 an opaque foreign source error. Keep repeated formatting read-only and
@@ -208,8 +222,8 @@ and this specification aligned as implementation proceeds.
 4. [ ] Cover `src/macros.rs`, `src/kind.rs`, `__private::format_err`, and both
    specialized and fallback paths in `src/ensure.rs`; add macro metadata without
    changing dispatch, hygiene, evaluation order, or existing-error pass-through
-5. [ ] Finalize the minimal annotation format, update `src/fmt.rs`, and add
-   formatting and boxed-interoperation regression tests
+5. [ ] Implement bracketed inline annotations in `src/fmt.rs` and add formatting
+   and boxed-interoperation regression tests
 6. [ ] Document adoption, supported capture points, and limitations in the README;
    run the compatibility checks below and report measured overhead
 
@@ -223,7 +237,7 @@ and this specification aligned as implementation proceeds.
 | Missing interception | Show that existing-error `?`, direct returns, identity conversions, and pass-through macros preserve old records without adding new ones |
 | Async and indirect calls | Test direct calls inside async bodies, moves between threads/tasks, untracked wrappers, function items as callbacks, and function-pointer coercions; distinguish supported capture from documented hints |
 | Compatibility | Retain upstream tests for cause chains, typed contexts, downcasts, boxed conversions, auto traits, layout, macro evaluation, and drop safety; update only intentionally changed debug-output expectations |
-| Formatting | Check `{}`, `{:#}`, and underlying `{:#?}` behavior against the baseline; verify that removing annotations recovers baseline `{:?}` output, including headings, cause numbering, indentation, blank lines, and backtrace presentation; cover zero, one, and multiple causes, multiline messages, optional macro fields, and backtraces disabled/enabled |
+| Formatting | Assert exact ` [file:line:column]` annotations without `at` or event-kind labels; check `{}`, `{:#}`, and underlying `{:#?}` behavior against the baseline; verify that removing annotations recovers baseline `{:?}` output, including headings, cause numbering, indentation, blank lines, and backtrace presentation; cover zero, one, and multiple causes, multiline messages with trailing line breaks, optional macro fields, and backtraces disabled/enabled |
 | Cost | Compare allocation counts, success/error-path timings, allocation sizes, and binary size against the baseline; no added metadata allocations or eager context evaluation |
 
 Run the existing CI coverage: `cargo test`, standard and `--no-default-features`
