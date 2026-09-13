@@ -1,3 +1,83 @@
+# Tracked anyhow
+
+This fork adds `[file:line]` suffixes to normal `Debug` (`{:?}`) reports while
+keeping anyhow's public API, display formats, cause chains, and typed downcasts.
+Tracking is always enabled, including when backtraces are disabled.
+
+```text
+loading configuration [src/main.rs:28]
+
+Caused by:
+    No such file or directory (os error 2) [src/config.rs:12]
+```
+
+## Use this implementation branch
+
+The Cargo package in this checkout remains named `anyhow`. Add a patch in the
+workspace root so compatible direct and transitive dependencies use the same
+error type:
+
+```toml
+[dependencies]
+anyhow = "1.0"
+
+[patch.crates-io]
+anyhow = { git = "https://github.com/imbolc/tracked-anyhow", branch = "tracking-impl" }
+```
+
+Update the lockfile with `cargo update -p anyhow` and check the resolved graph.
+A dependency alias such as `package = "tracked-anyhow"` alone does not replace
+transitive dependencies on the `anyhow` package. Publication under a different
+package name is not part of this implementation. See [Cargo's patch rules].
+
+## What locations mean
+
+Constructors, `anyhow!`, `bail!`, `ensure!`, foreign-error conversions, and explicit
+context attachments record their observed call sites. Each context keeps the
+inner error's earlier location. Passing through an existing anyhow error, including
+with `?` or `anyhow!(error)`, does not add a location.
+
+A foreign error's entry location is where it becomes an anyhow error, not where
+it originally failed. Its foreign source errors remain unannotated. A direct
+`.context(...)` on a foreign error records the attachment site only on the new
+context layer.
+
+Caller tracking follows Rust's [`#[track_caller]` forwarding rules]. Untracked
+wrappers and indirect calls, including function-pointer calls and callbacks such
+as `.map_err(Error::msg)`, can report an internal call site rather than the desired
+application call site. Calls inside async bodies can capture their local sites;
+this is not an async call-stack or full propagation trace.
+
+Moving an error retains its locations. Successful owned downcasting discards the
+consumed anyhow wrappers. `into_boxed_dyn_error()` retains the allocation and its
+own debug report; wrapping that opaque box again records a new entry without
+recovering the old metadata. Reallocating into the original boxed error type can
+discard locations along with the removed allocation.
+
+Tracking stores a static caller-location reference in each existing error
+allocation. It adds no allocation solely for capturing a location, no stack walk,
+and no runtime dependency. The public `Error` remains one pointer, while its
+private allocation is larger. Backtrace collection and formatting are unchanged.
+
+## Validation
+
+Run the existing suite and the added location and allocation regressions with
+backtraces disabled for exact diagnostic snapshots:
+
+```sh
+RUST_LIB_BACKTRACE=0 cargo test
+cargo check --no-default-features
+```
+
+The existing CI configuration also covers MSRV builds, Windows, Clippy, and Miri.
+The upstream documentation below describes the base API; normal debug reports
+add the location suffixes described above.
+
+[Cargo's patch rules]: https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html
+[`#[track_caller]` forwarding rules]: https://doc.rust-lang.org/reference/attributes/codegen.html#the-track_caller-attribute
+
+---
+
 Anyhow&ensp;¯\\\_(°ペ)\_/¯
 ==========================
 
