@@ -85,7 +85,7 @@ where
 ///     # const IGNORE: &str = stringify! {
 ///     ...
 ///     # };
-///     # unreachable!()
+///     # unimplemented!()
 /// }
 /// ```
 impl<T> Context<T, Infallible> for Option<T> {

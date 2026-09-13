@@ -8,6 +8,7 @@ use core::str;
 
 #[doc(hidden)]
 pub trait BothDebug {
+    #[track_caller]
     fn __dispatch_ensure(self, msg: &'static str) -> Error;
 }
 
@@ -23,6 +24,7 @@ where
 
 #[doc(hidden)]
 pub trait NotBothDebug {
+    #[track_caller]
     fn __dispatch_ensure(self, msg: &'static str) -> Error;
 }
 
@@ -78,6 +80,7 @@ impl Write for Buf {
     }
 }
 
+#[track_caller]
 fn render(msg: &'static str, lhs: &dyn Debug, rhs: &dyn Debug) -> Error {
     let mut lhs_buf = Buf::new();
     if fmt::write(&mut lhs_buf, format_args!("{:?}", lhs)).is_ok() {
