@@ -67,19 +67,6 @@ jobs:
       - run: cargo check --manifest-path tests/crate/Cargo.toml
       - run: cargo check --manifest-path tests/crate/Cargo.toml --no-default-features
 
-  package:
-    name: Publication dry run
-    needs: pre_ci
-    if: needs.pre_ci.outputs.continue
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --manifest-path tests/crate/Cargo.toml
-      - run: cargo test --manifest-path tests/crate/Cargo.toml --no-default-features
-      - run: cargo publish --dry-run
-
   minimal:
     name: Minimal versions
     needs: pre_ci

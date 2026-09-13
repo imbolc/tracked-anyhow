@@ -109,9 +109,8 @@ cargo test --manifest-path tests/crate/Cargo.toml --no-default-features
 cargo publish --dry-run
 ```
 
-The publication dry run packages and builds the crate without uploading it.
-CI includes that check and the aliased downstream smoke test, alongside MSRV
-builds, Windows, Clippy, and Miri.
+The publication dry run and downstream smoke tests are manual release checks.
+The existing CI covers MSRV builds, Windows, Clippy, and Miri.
 The upstream documentation below describes the base API; normal debug reports
 add the location suffixes described above.
 
