@@ -32,16 +32,7 @@ unsafe impl GlobalAlloc for CountingAllocator {
 static ALLOCATOR: CountingAllocator = CountingAllocator;
 
 fn allocations<T>(f: impl FnOnce() -> T) -> (T, usize) {
-    struct Reset;
-
-    impl Drop for Reset {
-        fn drop(&mut self) {
-            ALLOCATIONS.with(|count| count.set(None));
-        }
-    }
-
     ALLOCATIONS.with(|count| count.set(Some(0)));
-    let _reset = Reset;
     let value = black_box(f());
     let count = ALLOCATIONS.with(|count| count.take().unwrap());
     (value, count)
