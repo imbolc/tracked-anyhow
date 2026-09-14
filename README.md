@@ -18,9 +18,8 @@ anyhow = { package = "tracked-anyhow", version = "0.1" }
 
 ## Tracking and limitations
 
-This fork adds `[file:line]` suffixes only to normal `Debug` (`{:?}`) reports.
-Other formats, error chains, and typed downcasts are unchanged. Tracking is
-always enabled, including when backtraces are disabled.
+Adds `[file:line]` only to `{:?}` reports, even with backtraces disabled.
+Other formatting is unchanged. Requires Rust 1.77+.
 
 ```text
 loading configuration [src/main.rs:28]
@@ -29,51 +28,28 @@ Caused by:
     No such file or directory (os error 2) [src/config.rs:12]
 ```
 
-Constructors, macros, foreign-error conversions, and explicit context calls
-record their observed sites. Moving or forwarding an existing anyhow error,
-including through `?` or a pass-through macro, retains locations without adding
-new ones.
+Tracks error-entry and explicit context sites, not every `?` or async stack.
+Forwarding retains existing locations. Direct context on a foreign error
+annotates only the context; foreign sources stay unannotated. Entry sites need
+not be original failure sites; untracked or indirect calls can obscure
+[caller locations].
 
-A conversion location identifies entry into anyhow, not an earlier failure.
-Foreign source errors remain unannotated; direct `.context(...)` on a foreign
-error annotates only the new context layer. Untracked wrappers and indirect
-calls may obscure the application site under Rust's [`#[track_caller]` forwarding
-rules]. Calls inside async bodies capture local sites, not an async call stack.
+Owned downcasts and reallocating boxed conversions can discard locations.
+`into_boxed_dyn_error()` retains annotated Debug; rewrapping records only
+the new entry.
 
-Requires Rust 1.77 or newer for caller forwarding through blanket `Into`.
-Custom untracked conversions can still obscure the application site.
-
-Owned downcasting discards the consumed wrappers and their locations.
-`into_boxed_dyn_error()` retains its own annotated debug report, but rewrapping
-that opaque box records only a new entry. Reallocating into the original boxed
-error type can discard locations with the removed allocation.
-
-The library target remains `anyhow`, but the [dependency alias] does not replace
-transitive upstream anyhow dependencies or unify their error types. Both packages
-can coexist; APIs exchanging their errors need explicit conversion or coordinated
-migration. Upstream `anyhow::Error` does not implement `std::error::Error`, so
-`?` does not automatically convert it into the fork's error type.
+The [dependency alias] does not replace upstream anyhow in dependencies. The
+two `Error` types are distinct; `?` does not automatically convert between them.
 
 ## Versioning
 
-Versions such as `0.1.0+anyhow.1.0.104` combine independent fork SemVer with the
-upstream base. Increment the fork version for every release, including upstream
-updates; [Cargo ignores build metadata] in version requirements. The convention
-is documented beside `version` in `Cargo.toml`. Keep the rustdoc root URL in
-`src/lib.rs` synchronized with that version.
-
-Before publishing, run the existing tests with `RUST_LIB_BACKTRACE=0` and run
-`cargo publish --dry-run`. The dry run is a manual release check.
-
-Run the isolated MSRV location regression without the root dev-dependencies:
-
-```sh
-RUST_LIB_BACKTRACE=0 cargo +1.77.0 test --manifest-path tests/tracking-msrv/Cargo.toml
-```
+`0.1.0+anyhow.1.0.104` means fork version `0.1.0`, based on anyhow `1.0.104`.
+Bump the fork version for every release; [Cargo ignores build metadata].
+Follow the convention in `Cargo.toml` and keep rustdoc URLs in sync.
 
 [dependency alias]: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#renaming-dependencies-in-cargotoml
 [Cargo ignores build metadata]: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#version-metadata
-[`#[track_caller]` forwarding rules]: https://doc.rust-lang.org/reference/attributes/codegen.html#the-track_caller-attribute
+[caller locations]: https://doc.rust-lang.org/reference/attributes/codegen.html#the-track_caller-attribute
 
 <br>
 
@@ -98,9 +74,9 @@ RUST_LIB_BACKTRACE=0 cargo +1.77.0 test --manifest-path tests/tracking-msrv/Carg
   [`std::error::Error`]: https://doc.rust-lang.org/std/error/trait.Error.html
 
 - Attach context to help the person troubleshooting the error understand where
-  things went wrong. A low-level error like "No such file or directory" can be
-  annoying to debug without more context about what higher level step the
-  application was in the middle of.
+  things went wrong. A low-level error like "No such file or
+  directory" can be annoying to debug without more context about what higher
+  level step the application was in the middle of.
 
   ```rust
   use anyhow::{Context, Result};
@@ -219,6 +195,26 @@ are a library that wants to design your own dedicated error type(s) so that on
 failures the caller gets exactly the information that you choose.
 
 [thiserror]: https://github.com/dtolnay/thiserror
+
+<br>
+
+## Fork goals
+
+- Minimize the cumulative diff against upstream. Isolate fork-specific code,
+  tests, and documentation; reuse existing helpers and dependencies, and avoid
+  unrelated changes
+- Preserve anyhow's API, public layouts, evaluation, features, and `no_std`,
+  plus the declared MSRV. Location capture must not add allocations, stack walks,
+  source-file reads, or runtime dependencies
+- Keep upstream CI and tooling unchanged unless explicitly requested. Retain
+  test coverage; change upstream expectations only for intentional differences
+- Run relevant checks and `git diff --check`; report results and unrun checks.
+  Before publishing, run the tests below and `cargo publish --dry-run`
+
+```sh
+RUST_LIB_BACKTRACE=0 cargo test
+RUST_LIB_BACKTRACE=0 cargo +1.77.0 test --manifest-path tests/tracking-msrv/Cargo.toml
+```
 
 <br>
 
