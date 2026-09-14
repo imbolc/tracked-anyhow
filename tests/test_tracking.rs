@@ -290,7 +290,6 @@ fn multiline_message_bytes_are_preserved() {
         let suffix = format!(" [{}:{line}]", file!());
         let text = report(&error);
         assert_eq!(text, format!("{message}{suffix}"));
-        assert_eq!(text.strip_suffix(&suffix).unwrap(), message);
     }
 }
 
