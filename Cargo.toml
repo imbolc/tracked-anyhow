@@ -1,15 +1,24 @@
 [package]
-name = "anyhow"
-version = "1.0.104"
+name = "tracked-anyhow"
+# Independent fork SemVer; +anyhow.X.Y.Z records the upstream base.
+# Bump the fork version for every release, including upstream updates.
+# Cargo ignores build metadata when resolving versions, so never release
+# a change to the +anyhow suffix without also bumping the fork version.
+version = "0.1.0+anyhow.1.0.104"
 authors = ["David Tolnay <dtolnay@gmail.com>"]
 categories = ["rust-patterns", "no-std"]
-description = "Flexible concrete Error type built on std::error::Error"
-documentation = "https://docs.rs/anyhow"
+description = "Anyhow with automatic location tracking in error diagnostics"
+documentation = "https://docs.rs/tracked-anyhow"
 edition = "2021"
 keywords = ["error", "error-handling"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/dtolnay/anyhow"
-rust-version = "1.68"
+repository = "https://github.com/imbolc/tracked-anyhow"
+rust-version = "1.77"
+readme = "README.md"
+
+[lib]
+# Preserve upstream imports and doctests under the distinct Cargo package name.
+name = "anyhow"
 
 [features]
 default = ["std"]

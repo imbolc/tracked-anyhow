@@ -1,20 +1,55 @@
-Anyhow&ensp;¯\\\_(°ペ)\_/¯
-==========================
+Tracked anyhow
+==============
 
-[<img alt="github" src="https://img.shields.io/badge/github-dtolnay/anyhow-8da0cb?style=for-the-badge&labelColor=555555&logo=github" height="20">](https://github.com/dtolnay/anyhow)
-[<img alt="crates.io" src="https://img.shields.io/crates/v/anyhow.svg?style=for-the-badge&color=fc8d62&logo=rust" height="20">](https://crates.io/crates/anyhow)
-[<img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-anyhow-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs" height="20">](https://docs.rs/anyhow)
-[<img alt="build status" src="https://img.shields.io/github/actions/workflow/status/dtolnay/anyhow/ci.yml?branch=master&style=for-the-badge" height="20">](https://github.com/dtolnay/anyhow/actions?query=branch%3Amaster)
+[<img alt="github" src="https://img.shields.io/badge/github-imbolc/tracked--anyhow-8da0cb?style=for-the-badge&labelColor=555555&logo=github" height="20">](https://github.com/imbolc/tracked-anyhow)
+[<img alt="crates.io" src="https://img.shields.io/crates/v/tracked-anyhow.svg?style=for-the-badge&color=fc8d62&logo=rust" height="20">](https://crates.io/crates/tracked-anyhow)
+[<img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-tracked--anyhow-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs" height="20">](https://docs.rs/tracked-anyhow)
+[<img alt="build status" src="https://img.shields.io/github/actions/workflow/status/imbolc/tracked-anyhow/ci.yml?branch=master&style=for-the-badge" height="20">](https://github.com/imbolc/tracked-anyhow/actions?query=branch%3Amaster)
 
 This library provides [`anyhow::Error`][Error], a trait object based error type
 for easy idiomatic error handling in Rust applications.
 
-[Error]: https://docs.rs/anyhow/1.0/anyhow/struct.Error.html
+[Error]: https://docs.rs/tracked-anyhow/0.1/anyhow/struct.Error.html
 
 ```toml
 [dependencies]
-anyhow = "1.0"
+anyhow = { package = "tracked-anyhow", version = "0.1" }
 ```
+
+## Tracking and limitations
+
+Adds `[file:line]` only to `{:?}` reports, even with backtraces disabled.
+Other formatting is unchanged. Requires Rust 1.77+.
+
+```text
+loading configuration [src/main.rs:28]
+
+Caused by:
+    No such file or directory (os error 2) [src/config.rs:12]
+```
+
+Tracks error-entry and explicit context sites, not every `?` or async stack.
+Forwarding retains existing locations. Direct context on a foreign error
+annotates only the context; foreign sources stay unannotated. Entry sites need
+not be original failure sites; untracked or indirect calls can obscure
+[caller locations].
+
+Owned downcasts and reallocating boxed conversions can discard locations.
+`into_boxed_dyn_error()` retains annotated Debug; rewrapping records only
+the new entry.
+
+The [dependency alias] does not replace upstream anyhow in dependencies. The
+two `Error` types are distinct; `?` does not automatically convert between them.
+
+## Versioning
+
+`0.1.0+anyhow.1.0.104` means fork version `0.1.0`, based on anyhow `1.0.104`.
+Bump the fork version for every release; [Cargo ignores build metadata].
+Follow the convention in `Cargo.toml` and keep rustdoc URLs in sync.
+
+[dependency alias]: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#renaming-dependencies-in-cargotoml
+[Cargo ignores build metadata]: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#version-metadata
+[caller locations]: https://doc.rust-lang.org/reference/attributes/codegen.html#the-track_caller-attribute
 
 <br>
 
@@ -57,7 +92,7 @@ anyhow = "1.0"
   ```
 
   ```console
-  Error: Failed to read instrs from ./path/to/instrs.json
+  Error: Failed to read instrs from ./path/to/instrs.json [src/main.rs:8]
 
   Caused by:
       No such file or directory (os error 2)
@@ -131,7 +166,7 @@ Cargo.toml. A global allocator is required.
 
 ```toml
 [dependencies]
-anyhow = { version = "1.0", default-features = false }
+anyhow = { package = "tracked-anyhow", version = "0.1", default-features = false }
 ```
 
 With versions of Rust older than 1.81, no_std mode may require an additional
@@ -160,6 +195,26 @@ are a library that wants to design your own dedicated error type(s) so that on
 failures the caller gets exactly the information that you choose.
 
 [thiserror]: https://github.com/dtolnay/thiserror
+
+<br>
+
+## Fork goals
+
+- Minimize the cumulative diff against upstream. Isolate fork-specific code,
+  tests, and documentation; reuse existing helpers and dependencies, and avoid
+  unrelated changes
+- Preserve anyhow's API, public layouts, evaluation, features, and `no_std`,
+  plus the declared MSRV. Location capture must not add allocations, stack walks,
+  source-file reads, or runtime dependencies
+- Keep upstream CI and tooling unchanged unless explicitly requested. Retain
+  test coverage; change upstream expectations only for intentional differences
+- Run relevant checks and `git diff --check`; report results and unrun checks.
+  Before publishing, run the tests below and `cargo publish --dry-run`
+
+```sh
+RUST_LIB_BACKTRACE=0 cargo test
+RUST_LIB_BACKTRACE=0 cargo +1.77.0 test --manifest-path tests/tracking-msrv/Cargo.toml
+```
 
 <br>
 

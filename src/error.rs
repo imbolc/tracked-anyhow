@@ -12,7 +12,7 @@ use core::fmt::{self, Debug, Display};
 use core::mem::ManuallyDrop;
 #[cfg(any(feature = "std", not(anyhow_no_core_error)))]
 use core::ops::{Deref, DerefMut};
-use core::panic::{RefUnwindSafe, UnwindSafe};
+use core::panic::{Location, RefUnwindSafe, UnwindSafe};
 use core::ptr;
 use core::ptr::NonNull;
 
@@ -27,6 +27,7 @@ impl Error {
     #[cfg(any(feature = "std", not(anyhow_no_core_error)))]
     #[cold]
     #[must_use]
+    #[track_caller]
     pub fn new<E>(error: E) -> Self
     where
         E: StdError + Send + Sync + 'static,
@@ -74,6 +75,7 @@ impl Error {
     /// ```
     #[cold]
     #[must_use]
+    #[track_caller]
     pub fn msg<M>(message: M) -> Self
     where
         M: Display + Debug + Send + Sync + 'static,
@@ -137,6 +139,7 @@ impl Error {
     #[cfg(any(feature = "std", not(anyhow_no_core_error)))]
     #[cold]
     #[must_use]
+    #[track_caller]
     pub fn from_boxed(boxed_error: Box<dyn StdError + Send + Sync + 'static>) -> Self {
         let backtrace = backtrace_if_absent!(&*boxed_error);
         Error::construct_from_boxed(boxed_error, backtrace)
@@ -144,6 +147,7 @@ impl Error {
 
     #[cfg(any(feature = "std", not(anyhow_no_core_error)))]
     #[cold]
+    #[track_caller]
     pub(crate) fn construct_from_std<E>(error: E, backtrace: Option<Backtrace>) -> Self
     where
         E: StdError + Send + Sync + 'static,
@@ -151,6 +155,7 @@ impl Error {
         let vtable = &ErrorVTable {
             object_drop: object_drop::<E>,
             object_ref: object_ref::<E>,
+            object_context: None,
             object_boxed: object_boxed::<E>,
             object_reallocate_boxed: object_reallocate_boxed::<E>,
             object_downcast: object_downcast::<E>,
@@ -164,6 +169,7 @@ impl Error {
     }
 
     #[cold]
+    #[track_caller]
     pub(crate) fn construct_from_adhoc<M>(message: M, backtrace: Option<Backtrace>) -> Self
     where
         M: Display + Debug + Send + Sync + 'static,
@@ -173,6 +179,7 @@ impl Error {
         let vtable = &ErrorVTable {
             object_drop: object_drop::<MessageError<M>>,
             object_ref: object_ref::<MessageError<M>>,
+            object_context: None,
             #[cfg(any(feature = "std", not(anyhow_no_core_error)))]
             object_boxed: object_boxed::<MessageError<M>>,
             #[cfg(any(feature = "std", not(anyhow_no_core_error)))]
@@ -189,6 +196,7 @@ impl Error {
     }
 
     #[cold]
+    #[track_caller]
     pub(crate) fn construct_from_display<M>(message: M, backtrace: Option<Backtrace>) -> Self
     where
         M: Display + Send + Sync + 'static,
@@ -198,6 +206,7 @@ impl Error {
         let vtable = &ErrorVTable {
             object_drop: object_drop::<DisplayError<M>>,
             object_ref: object_ref::<DisplayError<M>>,
+            object_context: None,
             #[cfg(any(feature = "std", not(anyhow_no_core_error)))]
             object_boxed: object_boxed::<DisplayError<M>>,
             #[cfg(any(feature = "std", not(anyhow_no_core_error)))]
@@ -215,6 +224,7 @@ impl Error {
 
     #[cfg(any(feature = "std", not(anyhow_no_core_error)))]
     #[cold]
+    #[track_caller]
     pub(crate) fn construct_from_context<C, E>(
         context: C,
         error: E,
@@ -229,6 +239,7 @@ impl Error {
         let vtable = &ErrorVTable {
             object_drop: object_drop::<ContextError<C, E>>,
             object_ref: object_ref::<ContextError<C, E>>,
+            object_context: None,
             #[cfg(any(feature = "std", not(anyhow_no_core_error)))]
             object_boxed: object_boxed::<ContextError<C, E>>,
             #[cfg(any(feature = "std", not(anyhow_no_core_error)))]
@@ -245,6 +256,7 @@ impl Error {
 
     #[cfg(any(feature = "std", not(anyhow_no_core_error)))]
     #[cold]
+    #[track_caller]
     pub(crate) fn construct_from_boxed(
         error: Box<dyn StdError + Send + Sync>,
         backtrace: Option<Backtrace>,
@@ -254,6 +266,7 @@ impl Error {
         let vtable = &ErrorVTable {
             object_drop: object_drop::<BoxedError>,
             object_ref: object_ref::<BoxedError>,
+            object_context: None,
             #[cfg(any(feature = "std", not(anyhow_no_core_error)))]
             object_boxed: object_boxed::<BoxedError>,
             #[cfg(any(feature = "std", not(anyhow_no_core_error)))]
@@ -275,6 +288,7 @@ impl Error {
     // Unsafe because the given vtable must have sensible behavior on the error
     // value of type E.
     #[cold]
+    #[track_caller]
     unsafe fn construct<E>(
         error: E,
         vtable: &'static ErrorVTable,
@@ -286,6 +300,7 @@ impl Error {
         let inner: Box<ErrorImpl<E>> = Box::new(ErrorImpl {
             vtable,
             backtrace,
+            location: Location::caller(),
             _object: error,
         });
         // Erase the concrete type of E from the compile-time type system. This
@@ -354,6 +369,7 @@ impl Error {
     /// ```
     #[cold]
     #[must_use]
+    #[track_caller]
     pub fn context<C>(self, context: C) -> Self
     where
         C: Display + Send + Sync + 'static,
@@ -366,6 +382,7 @@ impl Error {
         let vtable = &ErrorVTable {
             object_drop: object_drop::<ContextError<C, Error>>,
             object_ref: object_ref::<ContextError<C, Error>>,
+            object_context: Some(context_source::<C>),
             #[cfg(any(feature = "std", not(anyhow_no_core_error)))]
             object_boxed: object_boxed::<ContextError<C, Error>>,
             #[cfg(any(feature = "std", not(anyhow_no_core_error)))]
@@ -676,6 +693,7 @@ where
     E: StdError + Send + Sync + 'static,
 {
     #[cold]
+    #[track_caller]
     fn from(error: E) -> Self {
         let backtrace = backtrace_if_absent!(&error);
         Error::construct_from_std(error, backtrace)
@@ -722,6 +740,8 @@ impl Drop for Error {
 struct ErrorVTable {
     object_drop: unsafe fn(Own<ErrorImpl>),
     object_ref: unsafe fn(Ref<ErrorImpl>) -> Ref<dyn StdError + Send + Sync + 'static>,
+    // Only native context layers expose an inner anyhow allocation.
+    object_context: Option<unsafe fn(Ref<ErrorImpl>) -> Ref<ErrorImpl>>,
     #[cfg(any(feature = "std", not(anyhow_no_core_error)))]
     object_boxed: unsafe fn(Own<ErrorImpl>) -> Box<dyn StdError + Send + Sync + 'static>,
     #[cfg(any(feature = "std", not(anyhow_no_core_error)))]
@@ -889,6 +909,16 @@ where
 }
 
 // Safety: requires layout of *e to match ErrorImpl<ContextError<C, Error>>.
+unsafe fn context_source<C>(e: Ref<ErrorImpl>) -> Ref<ErrorImpl>
+where
+    C: 'static,
+{
+    let unerased_ref = e.cast::<ErrorImpl<ContextError<C, Error>>>();
+    let unerased = unsafe { unerased_ref.deref() };
+    unerased._object.error.inner.by_ref()
+}
+
+// Safety: requires layout of *e to match ErrorImpl<ContextError<C, Error>>.
 #[cfg(all(not(error_generic_member_access), feature = "std"))]
 #[allow(clippy::unnecessary_wraps)]
 unsafe fn context_backtrace<C>(e: Ref<ErrorImpl>) -> Option<&Backtrace>
@@ -908,6 +938,7 @@ where
 pub(crate) struct ErrorImpl<E = ()> {
     vtable: &'static ErrorVTable,
     backtrace: Option<Backtrace>,
+    location: &'static Location<'static>,
     // NOTE: Don't use directly. Use only through vtable. Erased type may have
     // different alignment.
     _object: E,
@@ -938,6 +969,16 @@ impl<E> ErrorImpl<E> {
 }
 
 impl ErrorImpl {
+    pub(crate) unsafe fn location(this: Ref<Self>) -> &'static Location<'static> {
+        // Read the common header without forming a reference to the erased payload.
+        unsafe { ptr::addr_of!((*this.as_ptr()).location).read() }
+    }
+
+    pub(crate) unsafe fn context(this: Ref<Self>) -> Option<Ref<Self>> {
+        let context = unsafe { vtable(this.ptr) }.object_context?;
+        Some(unsafe { context(this) })
+    }
+
     pub(crate) unsafe fn error(this: Ref<Self>) -> &(dyn StdError + Send + Sync + 'static) {
         // Use vtable to attach E's native StdError vtable for the right
         // original type E.

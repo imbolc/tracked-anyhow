@@ -19,21 +19,21 @@ const EXPECTED_ALTDISPLAY_G: &str = "f failed: oh no!";
 
 const EXPECTED_ALTDISPLAY_H: &str = "g failed: f failed: oh no!";
 
-const EXPECTED_DEBUG_F: &str = "oh no!";
+const EXPECTED_DEBUG_F: &str = "oh no! [tests/test_fmt.rs:5]";
 
 const EXPECTED_DEBUG_G: &str = "\
-f failed
+f failed [tests/test_fmt.rs:9]
 
 Caused by:
-    oh no!\
+    oh no! [tests/test_fmt.rs:5]\
 ";
 
 const EXPECTED_DEBUG_H: &str = "\
-g failed
+g failed [tests/test_fmt.rs:13]
 
 Caused by:
-    0: f failed
-    1: oh no!\
+    0: f failed [tests/test_fmt.rs:9]
+    1: oh no! [tests/test_fmt.rs:5]\
 ";
 
 const EXPECTED_ALTDEBUG_F: &str = "\
