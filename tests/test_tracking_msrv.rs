@@ -5,7 +5,7 @@ use std::error::Error as StdError;
 use std::io;
 
 fn foreign() -> io::Error {
-    io::Error::new(io::ErrorKind::Other, "foreign")
+    io::Error::other("foreign")
 }
 
 fn assert_location(error: &Error, line: u32) {
