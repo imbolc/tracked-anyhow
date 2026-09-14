@@ -1,126 +1,10 @@
-# Tracked anyhow
+Tracked anyhow
+==============
 
 [<img alt="github" src="https://img.shields.io/badge/github-imbolc/tracked--anyhow-8da0cb?style=for-the-badge&labelColor=555555&logo=github" height="20">](https://github.com/imbolc/tracked-anyhow)
 [<img alt="crates.io" src="https://img.shields.io/crates/v/tracked-anyhow.svg?style=for-the-badge&color=fc8d62&logo=rust" height="20">](https://crates.io/crates/tracked-anyhow)
 [<img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-tracked--anyhow-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs" height="20">](https://docs.rs/tracked-anyhow)
 [<img alt="build status" src="https://img.shields.io/github/actions/workflow/status/imbolc/tracked-anyhow/ci.yml?branch=master&style=for-the-badge" height="20">](https://github.com/imbolc/tracked-anyhow/actions?query=branch%3Amaster)
-
-This fork adds `[file:line]` suffixes to normal `Debug` (`{:?}`) reports while
-keeping anyhow's public API, display formats, cause chains, and typed downcasts.
-Tracking is always enabled, including when backtraces are disabled.
-
-```text
-loading configuration [src/main.rs:28]
-
-Caused by:
-    No such file or directory (os error 2) [src/config.rs:12]
-```
-
-## Installation
-
-Use the published package through the existing dependency name:
-
-```diff
-- anyhow = "1.0"
-+ anyhow = { package = "tracked-anyhow", version = "0.1" }
-```
-
-```toml
-[dependencies]
-anyhow = { package = "tracked-anyhow", version = "0.1" }
-```
-
-The Cargo package is `tracked-anyhow`; its library target remains `anyhow` so
-existing imports, macros, and doctests keep their names. To use this branch
-before a release:
-
-```toml
-[dependencies.anyhow]
-package = "tracked-anyhow"
-git = "https://github.com/imbolc/tracked-anyhow"
-branch = "tracking-impl"
-```
-
-### Dependencies using upstream anyhow
-
-The [dependency alias] changes only the dependency in the adopting crate. It does
-not replace transitive dependencies on upstream `anyhow`. Both packages may
-coexist, but their `Error` types are distinct, even though both library targets
-are named `anyhow`. Update each workspace crate that adopts tracking.
-
-Concrete foreign errors still convert normally. APIs that exchange upstream
-`anyhow::Error` or `anyhow::Result` with the fork need explicit conversion or a
-coordinated migration. In particular, upstream `anyhow::Error` does not implement
-`std::error::Error`, so the fork's blanket conversion does not bridge it through
-`?`. A renamed package is not a whole-graph `[patch.crates-io]` replacement.
-
-## Versioning
-
-Versions use independent fork SemVer plus the exact upstream base, for example
-`0.1.0+anyhow.1.0.104`. A tracking fix can become `0.1.1+anyhow.1.0.104`; a later
-compatible upstream update can become `0.1.2+anyhow.1.0.105`. Choose the fork's
-major/minor/patch bump according to compatibility, not the upstream version.
-
-Every release increments the fork version. Never publish versions differing
-only in the `+anyhow...` suffix: [Cargo ignores build metadata] in version
-requirements. Users request `version = "0.1"`, or a minimum fork version such as
-`"0.1.1"` when they need a particular fix. Document upstream updates in release
-notes and keep `src/lib.rs`'s documentation root URL in sync with the manifest.
-
-## What locations mean
-
-Constructors, `anyhow!`, `bail!`, `ensure!`, foreign-error conversions, and explicit
-context attachments record their observed call sites. Each context keeps the
-inner error's earlier location. Passing through an existing anyhow error, including
-with `?` or `anyhow!(error)`, does not add a location.
-
-A foreign error's entry location is where it becomes an anyhow error, not where
-it originally failed. Its foreign source errors remain unannotated. A direct
-`.context(...)` on a foreign error records the attachment site only on the new
-context layer.
-
-Caller tracking follows Rust's [`#[track_caller]` forwarding rules]. Untracked
-wrappers and indirect calls, including function-pointer calls and callbacks such
-as `.map_err(Error::msg)`, can report an internal call site rather than the desired
-application call site. Calls inside async bodies can capture their local sites;
-this is not an async call-stack or full propagation trace.
-
-Moving an error retains its locations. Successful owned downcasting discards the
-consumed anyhow wrappers. `into_boxed_dyn_error()` retains the allocation and its
-own debug report; wrapping that opaque box again records a new entry without
-recovering the old metadata. Reallocating into the original boxed error type can
-discard locations along with the removed allocation.
-
-Tracking stores a static caller-location reference in each existing error
-allocation. It adds no allocation solely for capturing a location, no stack walk,
-and no runtime dependency. The public `Error` remains one pointer, while its
-private allocation is larger. Backtrace collection and formatting are unchanged.
-
-## Validation
-
-Run the existing suite and the added location and allocation regressions with
-backtraces disabled for exact diagnostic snapshots:
-
-```sh
-RUST_LIB_BACKTRACE=0 cargo test
-cargo check --no-default-features
-cargo test --manifest-path tests/crate/Cargo.toml
-cargo test --manifest-path tests/crate/Cargo.toml --no-default-features
-cargo publish --dry-run
-```
-
-The publication dry run and downstream smoke tests are manual release checks.
-The existing CI covers MSRV builds, Windows, Clippy, and Miri.
-The upstream documentation below describes the base API; normal debug reports
-add the location suffixes described above.
-
-[dependency alias]: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#renaming-dependencies-in-cargotoml
-[Cargo ignores build metadata]: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#version-metadata
-[`#[track_caller]` forwarding rules]: https://doc.rust-lang.org/reference/attributes/codegen.html#the-track_caller-attribute
-
----
-
-## API overview
 
 This library provides [`anyhow::Error`][Error], a trait object based error type
 for easy idiomatic error handling in Rust applications.
@@ -131,6 +15,58 @@ for easy idiomatic error handling in Rust applications.
 [dependencies]
 anyhow = { package = "tracked-anyhow", version = "0.1" }
 ```
+
+## Tracking and limitations
+
+This fork adds `[file:line]` suffixes only to normal `Debug` (`{:?}`) reports.
+Other formats, error chains, and typed downcasts are unchanged. Tracking is
+always enabled, including when backtraces are disabled.
+
+```text
+loading configuration [src/main.rs:28]
+
+Caused by:
+    No such file or directory (os error 2) [src/config.rs:12]
+```
+
+Constructors, macros, foreign-error conversions, and explicit context calls
+record their observed sites. Moving or forwarding an existing anyhow error,
+including through `?` or a pass-through macro, retains locations without adding
+new ones.
+
+A conversion location identifies entry into anyhow, not an earlier failure.
+Foreign source errors remain unannotated; direct `.context(...)` on a foreign
+error annotates only the new context layer. Untracked wrappers and indirect
+calls may obscure the application site under Rust's [`#[track_caller]` forwarding
+rules]. Calls inside async bodies capture local sites, not an async call stack.
+
+Owned downcasting discards the consumed wrappers and their locations.
+`into_boxed_dyn_error()` retains its own annotated debug report, but rewrapping
+that opaque box records only a new entry. Reallocating into the original boxed
+error type can discard locations with the removed allocation.
+
+The library target remains `anyhow`, but the [dependency alias] does not replace
+transitive upstream anyhow dependencies or unify their error types. Both packages
+can coexist; APIs exchanging their errors need explicit conversion or coordinated
+migration. Upstream `anyhow::Error` does not implement `std::error::Error`, so
+`?` does not automatically convert it into the fork's error type.
+
+## Versioning
+
+Versions such as `0.1.0+anyhow.1.0.104` combine independent fork SemVer with the
+upstream base. Increment the fork version for every release, including upstream
+updates; [Cargo ignores build metadata] in version requirements. The convention
+is documented beside `version` in `Cargo.toml`. Keep the rustdoc root URL in
+`src/lib.rs` synchronized with that version.
+
+Before publishing, run the existing tests with `RUST_LIB_BACKTRACE=0` and run
+`cargo publish --dry-run`. The dry run is a manual release check.
+
+The API examples below retain upstream text without location annotations.
+
+[dependency alias]: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#renaming-dependencies-in-cargotoml
+[Cargo ignores build metadata]: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#version-metadata
+[`#[track_caller]` forwarding rules]: https://doc.rust-lang.org/reference/attributes/codegen.html#the-track_caller-attribute
 
 <br>
 

@@ -9,18 +9,9 @@
 //! This library provides [`anyhow::Error`][Error], a trait object based error
 //! type for easy idiomatic error handling in Rust applications.
 //!
-//! This fork is published as `tracked-anyhow` with the library target `anyhow`:
-//!
-//! ```toml
-//! [dependencies]
-//! anyhow = { package = "tracked-anyhow", version = "0.1" }
-//! ```
-//!
-//! Normal `Debug` reports add `[file:line]` annotations. Output examples below
-//! show the upstream text before those annotations. Other formats are unchanged.
-//! The dependency alias does not replace transitive upstream anyhow dependencies;
-//! their error types remain distinct. See the [README] for adoption and release
-//! details.
+//! This fork adds `[file:line]` annotations only to normal `Debug` reports.
+//! Output examples below show the upstream text without those annotations.
+//! See the [README] for installation and limitations.
 //!
 //! [README]: https://github.com/imbolc/tracked-anyhow#readme
 //!
