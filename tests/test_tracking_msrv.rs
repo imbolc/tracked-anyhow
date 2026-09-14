@@ -51,9 +51,25 @@ fn generic_foreign_macros_preserve_the_caller() {
 }
 
 #[test]
-fn direct_from_preserves_the_caller() {
+fn generic_into_macros_preserve_the_caller() {
+    #[track_caller]
+    fn convert<E: Into<Error>>(error: E) -> Error {
+        anyhow!(error)
+    }
+
+    let line = line!() + 1;
+    let error = convert(foreign());
+    assert_location(&error, line);
+}
+
+#[test]
+fn direct_conversions_preserve_the_caller() {
     let line = line!() + 1;
     let error = Error::from(foreign());
+    assert_location(&error, line);
+
+    let line = line!() + 1;
+    let error: Error = foreign().into();
     assert_location(&error, line);
 }
 

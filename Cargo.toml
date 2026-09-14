@@ -13,7 +13,7 @@ edition = "2021"
 keywords = ["error", "error-handling"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/imbolc/tracked-anyhow"
-rust-version = "1.68"
+rust-version = "1.77"
 readme = "README.md"
 
 [lib]

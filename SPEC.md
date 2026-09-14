@@ -24,8 +24,8 @@ User should not expect surprises doing
   or unify error types
 - Keep the public API and type layouts unchanged; preserve error chains, typed
   context, downcasting, and evaluation behavior, including lazy context closures
-- Preserve upstream MSRV, feature support, `no_std` support, and backtrace
-  behavior
+- Require Rust 1.77 or newer for caller forwarding through blanket `Into`
+- Preserve upstream feature support, `no_std` support, and backtrace behavior
 - Keep the code diff from upstream minimal so upstream changes remain easy to
   merge
 
