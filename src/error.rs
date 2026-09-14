@@ -121,7 +121,6 @@ impl Error {
     ///     fn from_boxed(boxed_error: Box<dyn StdError + Send + Sync + 'static>) -> Self {
     ///         todo!()
     ///     }
-    ///
     ///     fn into_boxed(self) -> Box<dyn StdError + Send + Sync + 'static> {
     ///         todo!()
     ///     }

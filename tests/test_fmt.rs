@@ -19,16 +19,22 @@ const EXPECTED_ALTDISPLAY_G: &str = "f failed: oh no!";
 
 const EXPECTED_ALTDISPLAY_H: &str = "g failed: f failed: oh no!";
 
-const EXPECTED_DEBUG_F: &str = concat!("oh no! [", file!(), ":5]");
+const EXPECTED_DEBUG_F: &str = "oh no! [tests/test_fmt.rs:5]";
 
-const EXPECTED_DEBUG_G: &str = concat!(
-    "f failed [", file!(), ":9]\n\nCaused by:\n    oh no! [", file!(), ":5]",
-);
+const EXPECTED_DEBUG_G: &str = "\
+f failed [tests/test_fmt.rs:9]
 
-const EXPECTED_DEBUG_H: &str = concat!(
-    "g failed [", file!(), ":13]\n\nCaused by:\n    0: f failed [", file!(),
-    ":9]\n    1: oh no! [", file!(), ":5]",
-);
+Caused by:
+    oh no! [tests/test_fmt.rs:5]\
+";
+
+const EXPECTED_DEBUG_H: &str = "\
+g failed [tests/test_fmt.rs:13]
+
+Caused by:
+    0: f failed [tests/test_fmt.rs:9]
+    1: oh no! [tests/test_fmt.rs:5]\
+";
 
 const EXPECTED_ALTDEBUG_F: &str = "\
 Custom {
