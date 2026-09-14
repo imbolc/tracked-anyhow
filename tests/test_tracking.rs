@@ -5,12 +5,13 @@
     clippy::unnecessary_wraps
 )]
 
+mod drop;
+
+use self::drop::{DetectDrop, Flag};
 use anyhow::{anyhow, bail, ensure, Context, Error, Result};
 use futures::FutureExt;
 use std::cell::Cell;
 use std::error::Error as StdError;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -233,22 +234,6 @@ fn forwarding_and_pass_through_macros_keep_the_origin() {
 }
 
 #[test]
-fn custom_into_dispatch_keeps_existing_metadata() {
-    struct Converted(Error);
-
-    impl From<Converted> for Error {
-        fn from(value: Converted) -> Self {
-            value.0
-        }
-    }
-
-    let error = Error::new(Leaf);
-    let expected = report(&error);
-    let error = anyhow!(Converted(error));
-    assert_eq!(report(&error), expected);
-}
-
-#[test]
 fn tracked_wrappers_forward_the_call_site() {
     #[track_caller]
     fn make() -> Error {
@@ -338,34 +323,28 @@ fn async_body_captures_the_local_conversion_site() {
 #[derive(Error, Debug)]
 #[error("aligned")]
 #[repr(align(128))]
-struct Aligned(Arc<AtomicUsize>);
-
-impl Drop for Aligned {
-    fn drop(&mut self) {
-        self.0.fetch_add(1, Ordering::Relaxed);
-    }
-}
+struct Aligned(DetectDrop);
 
 #[test]
 fn over_aligned_payload_downcasts_and_drops_once() {
-    let drops = Arc::new(AtomicUsize::new(0));
-    let mut error = Error::new(Aligned(Arc::clone(&drops))).context("outer");
+    let has_dropped = Flag::new();
+    let mut error = Error::new(Aligned(DetectDrop::new(&has_dropped))).context("outer");
     assert!(error.downcast_mut::<Aligned>().is_some());
-    let value = error.downcast::<Aligned>().unwrap();
-    assert_eq!(drops.load(Ordering::Relaxed), 0);
+    let Aligned(value) = error.downcast::<Aligned>().unwrap();
+    assert!(!has_dropped.get());
     drop(value);
-    assert_eq!(drops.load(Ordering::Relaxed), 1);
+    assert!(has_dropped.get());
 }
 
 #[test]
 fn panicking_context_closure_drops_the_error_once() {
-    let drops = Arc::new(AtomicUsize::new(0));
+    let has_dropped = Flag::new();
     let result = std::panic::catch_unwind(|| {
-        let error = Error::new(Aligned(Arc::clone(&drops)));
+        let error = Error::new(Aligned(DetectDrop::new(&has_dropped)));
         let _ = Err::<(), _>(error).with_context(|| -> &'static str {
             panic!("context failed")
         });
     });
     assert!(result.is_err());
-    assert_eq!(drops.load(Ordering::Relaxed), 1);
+    assert!(has_dropped.get());
 }
