@@ -10,7 +10,6 @@
 //! type for easy idiomatic error handling in Rust applications.
 //!
 //! This fork adds `[file:line]` annotations only to normal `Debug` reports.
-//! Output examples below show the upstream text without those annotations.
 //! See the [README] for installation and limitations.
 //!
 //! [README]: https://github.com/imbolc/tracked-anyhow#readme
@@ -92,7 +91,7 @@
 //!   ```
 //!
 //!   ```console
-//!   Error: Failed to read instrs from ./path/to/instrs.json
+//!   Error: Failed to read instrs from ./path/to/instrs.json [src/main.rs:8]
 //!
 //!   Caused by:
 //!       No such file or directory (os error 2)
@@ -322,12 +321,12 @@ pub use anyhow as format_err;
 /// Failed to read instrs from ./path/to/instrs.json: No such file or directory (os error 2)
 /// ```
 ///
-/// The Debug format "{:?}" includes your backtrace if one was captured. Note
+/// The Debug format "{:?}" includes locations and any captured backtrace. Note
 /// that this is the representation you get by default if you return an error
 /// from `fn main` instead of printing it explicitly yourself.
 ///
 /// ```console
-/// Error: Failed to read instrs from ./path/to/instrs.json
+/// Error: Failed to read instrs from ./path/to/instrs.json [src/main.rs:5]
 ///
 /// Caused by:
 ///     No such file or directory (os error 2)
@@ -336,7 +335,7 @@ pub use anyhow as format_err;
 /// and if there is a backtrace available:
 ///
 /// ```console
-/// Error: Failed to read instrs from ./path/to/instrs.json
+/// Error: Failed to read instrs from ./path/to/instrs.json [src/main.rs:5]
 ///
 /// Caused by:
 ///     No such file or directory (os error 2)
@@ -515,7 +514,7 @@ pub type Result<T, E = Error> = core::result::Result<T, E>;
 /// level underlying causes would be enumerated below.
 ///
 /// ```console
-/// Error: Failed to read instrs from ./path/to/instrs.json
+/// Error: Failed to read instrs from ./path/to/instrs.json [src/main.rs:18]
 ///
 /// Caused by:
 ///     No such file or directory (os error 2)

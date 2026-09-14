@@ -71,8 +71,6 @@ Run the isolated MSRV location regression without the root dev-dependencies:
 RUST_LIB_BACKTRACE=0 cargo +1.77.0 test --manifest-path tests/tracking-msrv/Cargo.toml
 ```
 
-The API examples below retain upstream text without location annotations.
-
 [dependency alias]: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#renaming-dependencies-in-cargotoml
 [Cargo ignores build metadata]: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#version-metadata
 [`#[track_caller]` forwarding rules]: https://doc.rust-lang.org/reference/attributes/codegen.html#the-track_caller-attribute
@@ -118,7 +116,7 @@ The API examples below retain upstream text without location annotations.
   ```
 
   ```console
-  Error: Failed to read instrs from ./path/to/instrs.json
+  Error: Failed to read instrs from ./path/to/instrs.json [src/main.rs:8]
 
   Caused by:
       No such file or directory (os error 2)
