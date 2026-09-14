@@ -40,6 +40,11 @@ error annotates only the new context layer. Untracked wrappers and indirect
 calls may obscure the application site under Rust's [`#[track_caller]` forwarding
 rules]. Calls inside async bodies capture local sites, not an async call stack.
 
+On Rust 1.68, direct `.into()` also loses caller forwarding; use
+`Error::from(error)` when the conversion site matters. Macros bypass this gap
+when a `From` implementation is available. Custom `Into` implementations and
+calls with only a generic `Into` bound retain their existing forwarding limits.
+
 Owned downcasting discards the consumed wrappers and their locations.
 `into_boxed_dyn_error()` retains its own annotated debug report, but rewrapping
 that opaque box records only a new entry. Reallocating into the original boxed
@@ -61,6 +66,12 @@ is documented beside `version` in `Cargo.toml`. Keep the rustdoc root URL in
 
 Before publishing, run the existing tests with `RUST_LIB_BACKTRACE=0` and run
 `cargo publish --dry-run`. The dry run is a manual release check.
+
+Run the isolated MSRV location regression without the root dev-dependencies:
+
+```sh
+RUST_LIB_BACKTRACE=0 cargo +1.68.0 test --manifest-path tests/tracking-msrv/Cargo.toml
+```
 
 The API examples below retain upstream text without location annotations.
 

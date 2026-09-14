@@ -47,6 +47,9 @@ between upstream and tracked errors.
 - Capture where a message or foreign error becomes an anyhow error through
   constructors, macros, or conversions such as `?` and `Into`
 - Capture each explicit context attachment and retain earlier locations
+- Direct `context` or `with_context` on a foreign error annotates only the new
+  context layer, not the foreign error or its sources; keep this fused operation
+  in one allocation
 - Moving or forwarding an existing anyhow error, including through `?` or a
   pass-through macro, preserves its locations without adding new ones
 

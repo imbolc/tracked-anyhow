@@ -1,0 +1,16 @@
+[package]
+name = "tracked-anyhow-msrv"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.68"
+publish = false
+
+[lib]
+path = "../test_tracking_msrv.rs"
+
+[dependencies]
+anyhow = { package = "tracked-anyhow", path = "../..", default-features = false }
+
+[features]
+default = ["std"]
+std = ["anyhow/std"]

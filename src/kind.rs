@@ -46,6 +46,8 @@
 
 use crate::Error;
 use core::fmt::{Debug, Display};
+use core::marker::PhantomData;
+use core::ops::Deref;
 
 #[cfg(any(feature = "std", not(anyhow_no_core_error)))]
 use crate::StdError;
@@ -75,22 +77,46 @@ impl Adhoc {
     }
 }
 
-pub struct Trait;
+pub struct Trait<E>(PhantomData<E>);
 
 #[doc(hidden)]
 pub trait TraitKind: Sized {
     #[inline]
-    fn anyhow_kind(&self) -> Trait {
-        Trait
+    fn anyhow_kind(&self) -> Trait<Self> {
+        Trait(PhantomData)
     }
 }
 
 impl<E> TraitKind for E where E: Into<Error> {}
 
-impl Trait {
+// Prefer From directly because older blanket Into impls do not track callers.
+// Deref retains the fallback for custom Into impls and Into-only generic bounds.
+impl<E> Trait<E>
+where
+    Error: From<E>,
+{
     #[cold]
     #[track_caller]
-    pub fn new<E>(self, error: E) -> Error
+    pub fn new(self, error: E) -> Error {
+        Error::from(error)
+    }
+}
+
+impl<E> Deref for Trait<E> {
+    type Target = IntoError;
+
+    #[inline]
+    fn deref(&self) -> &IntoError {
+        &IntoError
+    }
+}
+
+pub struct IntoError;
+
+impl IntoError {
+    #[cold]
+    #[track_caller]
+    pub fn new<E>(&self, error: E) -> Error
     where
         E: Into<Error>,
     {
