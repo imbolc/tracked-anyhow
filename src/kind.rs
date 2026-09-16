@@ -66,6 +66,7 @@ impl<T> AdhocKind for &T where T: ?Sized + Display + Debug + Send + Sync + 'stat
 
 impl Adhoc {
     #[cold]
+    #[track_caller]
     pub fn new<M>(self, message: M) -> Error
     where
         M: Display + Debug + Send + Sync + 'static,
@@ -88,6 +89,7 @@ impl<E> TraitKind for E where E: Into<Error> {}
 
 impl Trait {
     #[cold]
+    #[track_caller]
     pub fn new<E>(self, error: E) -> Error
     where
         E: Into<Error>,
@@ -114,6 +116,7 @@ impl BoxedKind for Box<dyn StdError + Send + Sync> {}
 #[cfg(any(feature = "std", not(anyhow_no_core_error)))]
 impl Boxed {
     #[cold]
+    #[track_caller]
     pub fn new(self, error: Box<dyn StdError + Send + Sync>) -> Error {
         let backtrace = backtrace_if_absent!(&*error);
         Error::construct_from_boxed(error, backtrace)

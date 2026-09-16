@@ -1,4 +1,4 @@
-//! [![github]](https://github.com/dtolnay/anyhow)&ensp;[![crates-io]](https://crates.io/crates/anyhow)&ensp;[![docs-rs]](https://docs.rs/anyhow)
+//! [![github]](https://github.com/imbolc/tracked-anyhow)&ensp;[![crates-io]](https://crates.io/crates/tracked-anyhow)&ensp;[![docs-rs]](https://docs.rs/tracked-anyhow)
 //!
 //! [github]: https://img.shields.io/badge/github-8da0cb?style=for-the-badge&labelColor=555555&logo=github
 //! [crates-io]: https://img.shields.io/badge/crates.io-fc8d62?style=for-the-badge&labelColor=555555&logo=rust
@@ -8,6 +8,11 @@
 //!
 //! This library provides [`anyhow::Error`][Error], a trait object based error
 //! type for easy idiomatic error handling in Rust applications.
+//!
+//! This fork adds `[file:line]` annotations only to normal `Debug` reports.
+//! See the [README] for installation and limitations.
+//!
+//! [README]: https://github.com/imbolc/tracked-anyhow#readme
 //!
 //! <br>
 //!
@@ -86,7 +91,7 @@
 //!   ```
 //!
 //!   ```console
-//!   Error: Failed to read instrs from ./path/to/instrs.json
+//!   Error: Failed to read instrs from ./path/to/instrs.json [src/main.rs:8]
 //!
 //!   Caused by:
 //!       No such file or directory (os error 2)
@@ -198,7 +203,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! anyhow = { version = "1.0", default-features = false }
+//! anyhow = { package = "tracked-anyhow", version = "0.1", default-features = false }
 //! ```
 //!
 //! With versions of Rust older than 1.81, no_std mode may require an additional
@@ -206,7 +211,7 @@
 //! function that returns Anyhow's error type, as the trait that `?`-based error
 //! conversions are defined by is only available in std in those old versions.
 
-#![doc(html_root_url = "https://docs.rs/anyhow/1.0.104")]
+#![doc(html_root_url = "https://docs.rs/tracked-anyhow/0.1.0+anyhow.1.0.104")]
 #![cfg_attr(error_generic_member_access, feature(error_generic_member_access))]
 #![no_std]
 #![deny(dead_code, unsafe_op_in_unsafe_fn, unused_imports, unused_mut)]
@@ -316,12 +321,12 @@ pub use anyhow as format_err;
 /// Failed to read instrs from ./path/to/instrs.json: No such file or directory (os error 2)
 /// ```
 ///
-/// The Debug format "{:?}" includes your backtrace if one was captured. Note
+/// The Debug format "{:?}" includes locations and your backtrace if one was captured. Note
 /// that this is the representation you get by default if you return an error
 /// from `fn main` instead of printing it explicitly yourself.
 ///
 /// ```console
-/// Error: Failed to read instrs from ./path/to/instrs.json
+/// Error: Failed to read instrs from ./path/to/instrs.json [src/main.rs:5]
 ///
 /// Caused by:
 ///     No such file or directory (os error 2)
@@ -330,7 +335,7 @@ pub use anyhow as format_err;
 /// and if there is a backtrace available:
 ///
 /// ```console
-/// Error: Failed to read instrs from ./path/to/instrs.json
+/// Error: Failed to read instrs from ./path/to/instrs.json [src/main.rs:5]
 ///
 /// Caused by:
 ///     No such file or directory (os error 2)
@@ -509,7 +514,7 @@ pub type Result<T, E = Error> = core::result::Result<T, E>;
 /// level underlying causes would be enumerated below.
 ///
 /// ```console
-/// Error: Failed to read instrs from ./path/to/instrs.json
+/// Error: Failed to read instrs from ./path/to/instrs.json [src/main.rs:18]
 ///
 /// Caused by:
 ///     No such file or directory (os error 2)
@@ -615,12 +620,14 @@ pub type Result<T, E = Error> = core::result::Result<T, E>;
 ///     ```
 pub trait Context<T, E>: context::private::Sealed {
     /// Wrap the error value with additional context.
+    #[track_caller]
     fn context<C>(self, context: C) -> Result<T, Error>
     where
         C: Display + Send + Sync + 'static;
 
     /// Wrap the error value with additional context that is evaluated lazily
     /// only once an error does occur.
+    #[track_caller]
     fn with_context<C, F>(self, f: F) -> Result<T, Error>
     where
         C: Display + Send + Sync + 'static,
@@ -681,6 +688,7 @@ pub mod __private {
     #[doc(hidden)]
     #[inline]
     #[cold]
+    #[track_caller]
     pub fn format_err(args: Arguments) -> Error {
         if let Some(message) = args.as_str() {
             // anyhow!("literal"), can downcast to &'static str
